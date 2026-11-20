@@ -222,7 +222,7 @@ if seccion_activa == "Resumen":
                    else f"Semana regular sin festivos ni quincenas en {sede_sel if sede_sel != 'Todas las sedes' else 'la Costa Caribe'}.")
         txt_cal_motor = (f"WAPE recursivo {k_wape} · cobertura P10–P90 {k_cov} ({res['dias_historia']} días de historia)."
                          if met["wape"] is not None else f"{res['motor']} ({res['dias_historia']} días).")
-        st.markdown('<div class="white-card" style="height: 100%;"><div class="card-title" style="margin-bottom: 14px;">Alertas dinámicas</div>'
+        st.markdown('<div class="white-card" style="height: 100%;"><div class="card-title" style="margin-bottom: 14px;">Alertas</div>'
                     f'<div class="alert-box alert-red"><div class="alert-title">{a1_t}</div><div class="alert-desc">{a1_d}</div></div>'
                     f'<div class="alert-box alert-amber"><div class="alert-title">Sensores de calendario local</div><div class="alert-desc">{txt_cal}</div></div>'
                     f'<div class="alert-box alert-green"><div class="alert-title">Estado del motor cuantílico</div><div class="alert-desc">{txt_cal_motor}</div></div></div>',
