@@ -17,7 +17,7 @@ from modelo import (POSTURAS, UMBRAL_VIDA_CORTA, auditar, construir_costos, deci
                     pronosticar, sensibilidad_costos)
 from recursos import SVG_ESPIGA_TRIGO, SVG_PAN_ARTESANAL, cargar_imagen_base64
 
-st.set_page_config(page_title="Servipan · Inteligencia de Mercado y Demanda", page_icon="🍞",
+st.set_page_config(page_title="Servipan · Prediccion de Demanda", page_icon="🍞",
                    layout="wide", initial_sidebar_state="expanded")
 st.markdown(f"<style>{(Path(__file__).parent / 'estilos.css').read_text(encoding='utf-8')}</style>",
             unsafe_allow_html=True)
@@ -67,6 +67,9 @@ with st.sidebar:
             st.rerun()
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
+    with st.expander("📥 Cargar datos Excel", expanded=False):
+        archivo = st.file_uploader("Subir historial (.xlsx)", type=["xlsx"],
+                                   help="Columnas requeridas: Fecha, Ref, Desc item, Cant inv. Anonimice la razón social antes de subir a la nube.")
     with st.expander("🎯 Postura de riesgo y costos", expanded=True):
         postura_riesgo = st.selectbox("Política de abastecimiento", list(POSTURAS), index=0)
         costo_var_pct = st.slider("Costo variable (% del precio) — SUPUESTO", 40, 80, 60, 5) / 100.0
@@ -74,11 +77,6 @@ with st.sidebar:
         nivel_larga = st.slider("Nivel de servicio · vida útil > 10 días (%)", 50, 90, 90, 5) / 100.0
         st.caption(f"Newsvendor de un período solo para vida útil ≤ {UMBRAL_VIDA_CORTA} días. "
                    "Con vida larga el sobrante se vende después: se usa un nivel de servicio objetivo.")
-    with st.expander("💲 Costos reales por SKU (opcional)", expanded=False):
-        archivo_costos = st.file_uploader("Excel con columnas Ref, Costo_Unitario [, Precio_Venta]", type=["xlsx"], key="costos_xlsx")
-    with st.expander("📥 Cargar datos Excel", expanded=False):
-        archivo = st.file_uploader("Subir historial (.xlsx)", type=["xlsx"],
-                                   help="Columnas requeridas: Fecha, Ref, Desc item, Cant inv. Anonimice la razón social antes de subir a la nube.")
 
 seccion_activa = st.session_state.seccion_activa
 
@@ -98,22 +96,6 @@ if archivo is not None:
         st.sidebar.error(f"Error leyendo Excel: {exc}")
 if df_raw is None:
     df_raw, es_ejemplo = datos_ejemplo(), True
-
-costos_override = None
-if archivo_costos is not None:
-    try:
-        dfc = pd.read_excel(archivo_costos)
-        if {"Ref", "Costo_Unitario"}.issubset(dfc.columns):
-            costos_override = {}
-            for _, r in dfc.iterrows():
-                d = {"costo": float(r["Costo_Unitario"])}
-                if "Precio_Venta" in dfc.columns and pd.notna(r["Precio_Venta"]):
-                    d["precio"] = float(r["Precio_Venta"])
-                costos_override[str(r["Ref"]).strip().upper()] = d
-        else:
-            st.sidebar.error("El archivo de costos requiere las columnas Ref y Costo_Unitario.")
-    except Exception as exc:
-        st.sidebar.error(f"Error leyendo costos: {exc}")
 
 df_enriquecido, diag = enriquecer(df_raw)
 col_cliente = next((c for c in ["Razon social cliente factura", "Razón social cliente factura"] if c in df_enriquecido.columns), None)
@@ -181,10 +163,9 @@ df_diario_ml = df_filtrado.groupby(["Fecha", "Ref", "Desc item", "Linea_Oficial"
                                    as_index=False)["Cant inv"].sum()
 refs_param = tuple(df_param["Ref"].astype(str))
 res = pronosticar_cache(df_diario_ml, refs_param)
-costos = construir_costos(res["meta_map"], costo_var_pct, penalizacion_pct, costos_override)
+costos = construir_costos(res["meta_map"], costo_var_pct, penalizacion_pct)
 df_proy, df_manana = decidir(res, df_param, costos, postura_riesgo, horizonte_dias, nivel_larga)
 ultima_fecha, met = res["ultima_fecha"], res["metricas"]
-n_costos_reales = sum(1 for c in costos.values() if c["fuente"] == "real")
 
 DIAS = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
 ev = res["ml"][res["ml"]["h"] <= 7][["Fecha", "Evento_Calendario"]].drop_duplicates("Fecha")
@@ -413,8 +394,8 @@ elif seccion_activa == "Configuración":
                  f"y {N_BASE_VARS} de producto y memoria (`Ref_ID`, `Linea_ID`, `Vida_Util_Dias`, `lag_1`, `lag_7`, `lag_14`, `roll_mean_7`, `roll_mean_28`, `roll_std_7`).")
         st.write(f"- **Decisión:** newsvendor de un período (CR* = cu / (cu + co)) para vida útil ≤ {UMBRAL_VIDA_CORTA} días; nivel de servicio objetivo para vida larga. "
                  "No hay buffers fijos adicionales. La orden cubre el ciclo de reposición (7 / frecuencia de cargue) sumando cuantiles diarios.")
-        st.write(f"- **Costos:** {n_costos_reales} SKU con costo real cargado; el resto usa el supuesto de {int(costo_var_pct * 100)} % del precio de lista. "
-                 "Sin costos reales, el nivel de servicio óptimo no es defendible.")
+        st.write(f"- **Costos:** supuesto paramétrico de {int(costo_var_pct * 100)} % de costo variable sobre el precio de lista "
+                 f"y {int(penalizacion_pct * 100)} % de penalización por quiebre.")
     st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
     with st.container(border=True):
         st.markdown('<div class="card-title">Auditoría experimental</div>', unsafe_allow_html=True)
@@ -441,10 +422,7 @@ elif seccion_activa == "Configuración":
                 pol_corta, pol_larga = evaluar_politicas(aud["bt"], aud["meta_map"], df_param, costos, nivel_larga)
                 st.markdown(f"**5. Políticas · vida útil ≤ {UMBRAL_VIDA_CORTA} días (costo = faltante × cu + sobrante × co)**")
                 st.dataframe(pol_corta, width="stretch", hide_index=True)
-                st.markdown(f"**6. Políticas · vida útil > {UMBRAL_VIDA_CORTA} días (solo servicio y excedente; el sobrante no es merma)**")
+                st.markdown(f"**6. Políticas · vida útil > {UMBRAL_VIDA_CORTA} días (excedente trasladable al ciclo siguiente)**")
                 st.dataframe(pol_larga, width="stretch", hide_index=True)
-                sens = sensibilidad_costos(aud["bt"], aud["meta_map"], df_param)
-                if not sens.empty:
-                    st.markdown("**7. Sensibilidad: ahorro del newsvendor frente a P50 puro (%) según costo variable y penalización**")
-                    st.dataframe(sens.pivot(index="Costo var. %", columns="Penal. quiebre %", values="Ahorro vs P50 %"), width="stretch")
-                    st.caption("Mejor política en la cuadrícula: " + ", ".join(f"{k}: {v} casos" for k, v in sens["Mejor política"].value_counts().items()))
+                st.markdown("**7. Sensibilidad económica (ahorro de Newsvendor frente a P50 y buffer fijo)**")
+                st.dataframe(sensibilidad_costos(aud["bt"], aud["meta_map"], df_param), width="stretch", hide_index=True)
