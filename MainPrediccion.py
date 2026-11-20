@@ -17,7 +17,7 @@ from modelo import (POSTURAS, UMBRAL_VIDA_CORTA, auditar, construir_costos, deci
                     pronosticar, sensibilidad_costos)
 from recursos import SVG_ESPIGA_TRIGO, SVG_PAN_ARTESANAL, cargar_imagen_base64
 
-st.set_page_config(page_title="Servipan · Prediccion de Demanda", page_icon="🍞",
+st.set_page_config(page_title="Servipan · Prediccion Demanda", page_icon="🍞",
                    layout="wide", initial_sidebar_state="expanded")
 st.markdown(f"<style>{(Path(__file__).parent / 'estilos.css').read_text(encoding='utf-8')}</style>",
             unsafe_allow_html=True)
@@ -119,8 +119,8 @@ c_izq, c_lin, c_sed, c_hor = st.columns([5.1, 1.5, 2.0, 1.4])
 badge = ('<span class="data-badge-demo">Benchmark sintético (reproducible, 180 días)</span>' if es_ejemplo
          else '<span class="data-badge-real">Datos reales cargados</span>')
 titulos = {
-    "Resumen": ("Resumen de inteligencia de mercado", f"{N_BASE_VARS + N_CAL_VARS} variables (calendario sociocultural + rezagos SKU) {badge}"),
-    "Pronóstico": ("Pronóstico detallado por SKU", "Curvas cuantílicas diarias con festivos, quincenas y calendario académico"),
+    "Resumen": ("Resumen de inteligencia de mercado", f"{N_BASE_VARS + N_CAL_VARS} variables (calendario sociocultural + historial por producto) {badge}"),
+    "Pronóstico": ("Pronóstico detallado por producto", "Curvas cuantílicas diarias con festivos, quincenas y calendario académico"),
     "Productos": ("Catálogo oficial y líneas Servipan", f"Fichas técnicas de {len(CATALOGO_OFICIAL_SERVIPAN)} referencias, presentaciones y canales"),
     "Sedes": ("Cobertura regional Costa Caribe", f"{len(LUGARES_DISTRIBUCION_SERVIPAN)} corredores y {sum(len(v['municipios']) for v in LUGARES_DISTRIBUCION_SERVIPAN.values())} localidades"),
     "Escenarios": ("Simulador de estrategias y riesgos", "El choque se aplica a toda la distribución y se recalculan cajas y lotes"),
@@ -191,7 +191,7 @@ if seccion_activa == "Resumen":
         ("kpi-top-cacao", SVG_PAN_ARTESANAL, "Demanda esperada del ciclo (P50)", f"{fmt_n(demanda)} und",
          "kpi-sub-green" if var_prom >= 0 else "kpi-sub-amber", f"{var_prom:+.1f} % vs. misma referencia semana previa".replace(".", ",")),
         ("kpi-top-dorado", SVG_ESPIGA_TRIGO, "WAPE recursivo (1–7 días)", k_wape, "kpi-sub-neutral", k_wape_sub),
-        ("kpi-top-queso", SVG_PAN_ARTESANAL, "SKUs con alerta", f"{n_riesgo} SKUs", "kpi-sub-amber",
+        ("kpi-top-queso", SVG_PAN_ARTESANAL, "Productos con alerta", f"{n_riesgo} referencias", "kpi-sub-amber",
          f"Orden total: {fmt_n(orden)} und ({postura_riesgo.split()[0]})"),
         ("kpi-top-salvia", SVG_ESPIGA_TRIGO, "Cobertura empírica P10–P90", k_cov, "kpi-sub-green", k_cov_sub),
     ]
@@ -372,9 +372,9 @@ elif seccion_activa == "Alertas":
     riesgos = df_manana[df_manana["Estado"] != "Estable"] if not df_manana.empty else pd.DataFrame()
     if not riesgos.empty:
         lista = ", ".join(f"{r['Producto']} ({r['Var %']:+.1f} %)" for _, r in riesgos.head(4).iterrows())
-        tr, dr = f"{len(riesgos)} referencias con alerta activa", f"SKUs priorizados: {lista}. El estado depende solo de los datos, no de la postura elegida."
+        tr, dr = f"{len(riesgos)} referencias con alerta activa", f"Productos priorizados: {lista}. El estado depende solo de los datos, no de la postura elegida."
     else:
-        tr, dr = "Portafolio en rango operativo estable", "Ningún SKU supera el umbral de crecimiento (+8 %) ni presenta picos críticos de perecibilidad."
+        tr, dr = "Portafolio en rango operativo estable", "Ningún producto supera el umbral de crecimiento (+8 %) ni presenta picos críticos de perecibilidad."
     w = f"{met['wape']} %" if met["wape"] is not None else "N/D"
     cv = f"{met['cobertura']} %" if met["cobertura"] is not None else "N/D"
     st.markdown('<div class="white-card"><div class="card-title" style="margin-bottom: 14px;">Bitácora de alertas tempranas</div>'
